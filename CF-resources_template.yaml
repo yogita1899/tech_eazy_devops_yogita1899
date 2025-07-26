@@ -1,0 +1,97 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: DevOps Assignment 2 - Create IAM, EC2, S3, Lifecycle Rules
+
+Parameters:
+  BucketName:
+    Type: String
+    Description: Name of the S3 bucket to create
+
+Resources:
+
+  ##IAM Roles
+  S3ReadOnlyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: S3ReadOnlyRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: S3ReadOnlyPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: "*"
+
+  S3WriteOnlyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: S3WriteOnlyRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: S3WriteOnlyPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:CreateBucket
+                Resource: "*"
+
+  ##Instance Profile
+  S3WriteOnlyInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: WriteOnlyInstanceProfile
+      Roles:
+        - Ref: S3WriteOnlyRole
+
+  ##S3 Bucket
+  LogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref BucketName
+      AccessControl: Private
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireAppLogs
+            Status: Enabled
+            Prefix: app/logs/
+            ExpirationInDays: 7
+
+  ##EC2 Instance
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: ami-0583c2579d6458f46   
+      IamInstanceProfile: !Ref S3WriteOnlyInstanceProfile
+      KeyName: projectecheazy-1key
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y aws-cli
+          echo "Test log data" > /var/log/cloud-init.log
+
+Outputs:
+  S3BucketName:
+    Description: The name of the S3 bucket created
+    Value: !Ref LogsBucket
+
+  InstanceId:
+    Description: EC2 Instance ID
+    Value: !Ref EC2Instance
